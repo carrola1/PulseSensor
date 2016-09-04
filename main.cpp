@@ -1,11 +1,11 @@
-#include "mbed.h"
-#include "max30100.h" 
+
+#include "MAX30102.h" 
 
 //I2C i2c(I2C_SDA, I2C_SCL);
 DigitalOut myled(LED1);
 static Serial pc(SERIAL_TX, SERIAL_RX);
 
-MAX30100 sensor;
+MAX30102 sensor;
 
 int main()
 {

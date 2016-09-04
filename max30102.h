@@ -3,10 +3,9 @@
  */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __MAX30100_H
-#define __MAX30100_H
+#ifndef __MAX30102_H
+#define __MAX30102_H
 
-#include "mbed.h"
 
 
 /******************************************************************************/
@@ -14,54 +13,54 @@
 /******************************************************************************/
 
 // status registers
-#define MAX30100_INT_STATUS          0x00
-#define MAX30100_INT_STATUS_2        0x01
-#define MAX30100_INT_ENABLE          0x02
-#define MAX30100_INT_ENABLE_2        0x03
+#define MAX30102_INT_STATUS          0x00
+#define MAX30102_INT_STATUS_2        0x01
+#define MAX30102_INT_ENABLE          0x02
+#define MAX30102_INT_ENABLE_2        0x03
 
 // FIFO registers
-#define MAX30100_FIFO_W_POINTER      0x04
-#define MAX30100_OVR_COUNTER         0x05
-#define MAX30100_FIFO_R_POINTER      0x06
-#define MAX30100_FIFO_DATA_REG       0x07
+#define MAX30102_FIFO_W_POINTER      0x04
+#define MAX30102_OVR_COUNTER         0x05
+#define MAX30102_FIFO_R_POINTER      0x06
+#define MAX30102_FIFO_DATA_REG       0x07
 
 // configuration registers
-#define MAX30100_FIFO_CONFIG         0x08
-#define MAX30100_CONFIG              0x09
-#define MAX30100_SPO2_CONFIG         0x0A
-#define MAX30100_LED_CONFIG_1        0x0C
-#define MAX30100_LED_CONFIG_2        0x0D
+#define MAX30102_FIFO_CONFIG         0x08
+#define MAX30102_CONFIG              0x09
+#define MAX30102_SPO2_CONFIG         0x0A
+#define MAX30102_LED_CONFIG_1        0x0C
+#define MAX30102_LED_CONFIG_2        0x0D
 
 // temperature registers
-#define MAX30100_TEMP_INTEGER        0x1F
-#define MAX30100_TEMP_FRACTION       0x20
+#define MAX30102_TEMP_INTEGER        0x1F
+#define MAX30102_TEMP_FRACTION       0x20
 
 // PART ID registers
-#define MAX30100_REVISION_ID         0xFE
-#define MAX30100_PART_ID             0xFF
+#define MAX30102_REVISION_ID         0xFE
+#define MAX30102_PART_ID             0xFF
 
-#define I_AM_MAX30100                0x11
+#define I_AM_MAX30102                0x11
 
 /************************************** REGISTERS VALUE *******************************************/
 
 // I2C address
-#define MAX30100_ADDRESS             0xAE
+#define MAX30102_ADDRESS             0xAE
 
 //Enable interrupts
-#define MAX30100_INT_ENB_A_FULL      ((uint8_t)0x80)
-#define MAX30100_INT_ENB_TEMP_RDY    ((uint8_t)0x40)
-#define MAX30100_INT_ENB_HR_RDY      ((uint8_t)0x20)
-#define MAX30100_INT_ENB_SO2_RDY     ((uint8_t)0x10)
+#define MAX30102_INT_ENB_A_FULL      ((uint8_t)0x80)
+#define MAX30102_INT_ENB_TEMP_RDY    ((uint8_t)0x40)
+#define MAX30102_INT_ENB_HR_RDY      ((uint8_t)0x20)
+#define MAX30102_INT_ENB_SO2_RDY     ((uint8_t)0x10)
 
 //Mode configuration
-#define MAX30100_MODE_SHDN           ((uint8_t)0x80)
-#define MAX30100_MODE_RESET          ((uint8_t)0x40)
-#define MAX30100_MODE_TEMP_EN        ((uint8_t)0x08)
-#define MAX30100_MODE_HR             ((uint8_t)0x02)
-#define MAX30100_MODE_SPO2           ((uint8_t)0x03)
+#define MAX30102_MODE_SHDN           ((uint8_t)0x80)
+#define MAX30102_MODE_RESET          ((uint8_t)0x40)
+#define MAX30102_MODE_TEMP_EN        ((uint8_t)0x08)
+#define MAX30102_MODE_HR             ((uint8_t)0x02)
+#define MAX30102_MODE_SPO2           ((uint8_t)0x03)
 
 //SPO2 configuration
-#define MAX30100_SPO2_HI_RES_EN           ((uint8_t)0x40)
+#define MAX30102_SPO2_HI_RES_EN           ((uint8_t)0x40)
 
 typedef enum{ // This is the same for both LEDs
     pw69,    // 69us pulse
@@ -124,16 +123,16 @@ typedef enum
 } OXIMETER_StatusTypeDef;
 
 /**
- * @brief  MAX30100 driver extended internal structure definition
+ * @brief  MAX30102 driver extended internal structure definition
  */
 typedef struct
 {
     OXIMETER_StatusTypeDef (*Enable_Free_Fall_Detection) (void);
     OXIMETER_StatusTypeDef (*Disable_Free_Fall_Detection) (void);
     OXIMETER_StatusTypeDef (*Get_Status_Free_Fall_Detection) (uint8_t *);
-} MAX30100_DrvExtTypeDef;
+} MAX30102_DrvExtTypeDef;
 
-class MAX30100 {
+class MAX30102 {
 public:
         
     /* Public Methods */
@@ -164,4 +163,4 @@ public:
     void  printRegisters(void); // Dumps contents of registers for debug
 };
 
-#endif /* __MAX30100_H */
+#endif /* __MAX30102_H */
