@@ -60,7 +60,7 @@
 *******************************************************************************
 */
 #include "max30102.h"
-#include "SoftI2CMaster.h"
+#include <Wire.h>
 #include "algorithm.h"
 
 bool maxim_max30102_write_reg(uint8_t uch_addr, uint8_t uch_data)
@@ -75,14 +75,15 @@ bool maxim_max30102_write_reg(uint8_t uch_addr, uint8_t uch_data)
 * \retval       true on success
 */
 {
-  if(!i2c_start(I2C_WRITE_ADDR))
+  Wire.beginTransmission(87);
+  Wire.write(uch_addr);
+  Wire.write(uch_data);
+  int rtn = Wire.endTransmission(true);
+  if (rtn == 0) {
+    return true;
+  } else {
     return false;
-  if(!i2c_write(uch_addr))
-    return false;
-  if(!i2c_write(uch_data))
-    return false;
-  i2c_stop();
-  return true;
+  }
 }
 
 bool maxim_max30102_read_reg(uint8_t uch_addr, uint8_t *puch_data)
@@ -97,15 +98,16 @@ bool maxim_max30102_read_reg(uint8_t uch_addr, uint8_t *puch_data)
 * \retval       true on success
 */
 {
-  if(!i2c_start(I2C_WRITE_ADDR))
+  Wire.beginTransmission(87);
+  Wire.write(uch_addr);
+  int rtn = Wire.endTransmission(false);
+  Wire.requestFrom(87,1,true);
+  *puch_data = Wire.read();
+  if (rtn == 0) {
+    return true;
+  } else {
     return false;
-  if(!i2c_write(uch_addr))
-    return false;
-  if(!i2c_rep_start(I2C_READ_ADDR))
-    return false;  
-  *puch_data=i2c_read(true);
-  i2c_stop();
-  return true;
+  }
 }
 
 bool maxim_max30102_init()
@@ -119,7 +121,6 @@ bool maxim_max30102_init()
 * \retval       true on success
 */
 {
-  i2c_init();
   if(!maxim_max30102_write_reg(REG_INTR_ENABLE_1,0xc0)) // INTR setting
     return false;
   if(!maxim_max30102_write_reg(REG_INTR_ENABLE_2,0x00))
@@ -146,13 +147,8 @@ bool maxim_max30102_init()
   return true;  
 }
 
-#if defined(ARDUINO_AVR_UNO)
-//Arduino Uno doesn't have enough SRAM to store 100 samples of IR led data and red led data in 32-bit format
-//To solve this problem, 16-bit MSB of the sampled data will be truncated.  Samples become 16-bit data.
-bool maxim_max30102_read_fifo(uint16_t *pun_red_led, uint16_t *pun_ir_led)
-#else
 bool maxim_max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led)
-#endif
+
 /**
 * \brief        Read a set of samples from the MAX30102 FIFO register
 * \par          Details
@@ -170,30 +166,28 @@ bool maxim_max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led)
   *pun_red_led=0;
   maxim_max30102_read_reg(REG_INTR_STATUS_1, &uch_temp);
   maxim_max30102_read_reg(REG_INTR_STATUS_2, &uch_temp);
-  if(!i2c_start(I2C_WRITE_ADDR))
-    return false;
-  if(!i2c_write(REG_FIFO_DATA))
-    return false;
-  if(!i2c_rep_start(I2C_READ_ADDR))
-    return false;  
-  un_temp=i2c_read(false);
+  
+  Wire.beginTransmission(87);
+  Wire.write(REG_FIFO_DATA);
+  int rtn = Wire.endTransmission(false);
+  Wire.requestFrom(87,6,true); 
+  un_temp=Wire.read();
   un_temp<<=16;
   *pun_red_led+=un_temp;
-  un_temp=i2c_read(false);
+  un_temp=Wire.read();
   un_temp<<=8;
   *pun_red_led+=un_temp;
-  un_temp=i2c_read(false);
+  un_temp=Wire.read();
   *pun_red_led+=un_temp;
   
-  un_temp=i2c_read(false);
+  un_temp=Wire.read();
   un_temp<<=16;
   *pun_ir_led+=un_temp;
-  un_temp=i2c_read(false);
+  un_temp=Wire.read();
   un_temp<<=8;
   *pun_ir_led+=un_temp;
-  un_temp=i2c_read(true);
+  un_temp=Wire.read();
   *pun_ir_led+=un_temp;
-  i2c_stop();
   *pun_red_led&=0x03FFFF;  //Mask MSB [23:18]
   *pun_ir_led&=0x03FFFF;  //Mask MSB [23:18]
   return true;

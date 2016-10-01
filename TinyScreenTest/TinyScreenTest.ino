@@ -13,26 +13,32 @@
 #include <SPI.h>
 #include <TinyScreen.h>
 
-//Library must be passed the board type
-//TinyScreenDefault for TinyScreen shields
-//TinyScreenAlternate for alternate address TinyScreen shields
-//TinyScreenPlus for TinyScreen+
 TinyScreen display = TinyScreen(TinyScreenPlus);
 
 void setup(void) {
   display.begin();
   //setBrightness(brightness);//sets main current level, valid levels are 0-15
   display.setBrightness(10);
+  Wire.begin();
+  SerialUSB.begin(9600);
 }
 
-int x = 80;
+byte x;
+byte addr = 0xFF;
+int rtn;
 void loop() {
+  //if (x == 120) {
+  //  x = 80;
+  //} else {
+  //  x = x + 1;
+  //}
+  Wire.beginTransmission(87);
+  Wire.write(addr);
+  rtn = Wire.endTransmission(false);
+  Wire.requestFrom(87,1,true);
+  x = Wire.read();
+  SerialUSB.println(x);
   writeText(x);
-  if (x == 120) {
-    x = 80;
-  } else {
-    x = x + 1;
-  }
 }
 
 void writeText(int rate){

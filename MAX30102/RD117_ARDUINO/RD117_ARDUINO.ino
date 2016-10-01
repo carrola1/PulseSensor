@@ -77,18 +77,16 @@
 #include <Arduino.h>
 #include "algorithm.h"
 #include "max30102.h"
+#include <TinyScreen.h>
+#include <SPI.h>
+#include <Wire.h>
+
+TinyScreen display = TinyScreen(TinyScreenPlus);
 
 #define MAX_BRIGHTNESS 255
 
-#if defined(ARDUINO_AVR_UNO)
-//Arduino Uno doesn't have enough SRAM to store 100 samples of IR led data and red led data in 32-bit format
-//To solve this problem, 16-bit MSB of the sampled data will be truncated.  Samples become 16-bit data.
-uint16_t aun_ir_buffer[100]; //infrared LED sensor data
-uint16_t aun_red_buffer[100];  //red LED sensor data
-#else
 uint32_t aun_ir_buffer[100]; //infrared LED sensor data
 uint32_t aun_red_buffer[100];  //red LED sensor data
-#endif
 int32_t n_ir_buffer_length; //data length
 int32_t n_spo2;  //SPO2 value
 int8_t ch_spo2_valid;  //indicator to show if the SPO2 calculation is valid
@@ -99,21 +97,26 @@ uint8_t uch_dummy;
 
 // the setup routine runs once when you press reset:
 void setup() {
-
+  delay(1000);
+  SerialUSB.begin(115200);
+  SerialUSB.println("Up and running!");
+  Wire.begin();
+  display.begin();
+  //setBrightness(brightness);//sets main current level, valid levels are 0-15
+  display.setBrightness(10);
   maxim_max30102_reset(); //resets the MAX30102
   // initialize serial communication at 115200 bits per second:
-  Serial.begin(115200);
-  pinMode(10, INPUT);  //pin D10 connects to the interrupt output pin of the MAX30102
+  pinMode(8, INPUT);  //pin D10 connects to the interrupt output pin of the MAX30102
   delay(1000);
   maxim_max30102_read_reg(REG_INTR_STATUS_1,&uch_dummy);  //Reads/clears the interrupt status register
-  while(Serial.available()==0)  //wait until user presses a key
+  while(SerialUSB.available()==0)  //wait until user presses a key
   {
-    Serial.write(27);       // ESC command
-    Serial.print(F("[2J"));    // clear screen command
-    Serial.println(F("Press any key to start conversion"));
+    SerialUSB.write(27);       // ESC command
+    SerialUSB.print(F("[2J"));    // clear screen command
+    SerialUSB.println(F("Press any key to start conversion"));
     delay(1000);
   }
-  uch_dummy=Serial.read();
+  uch_dummy=SerialUSB.read();
   maxim_max30102_init();  //initialize the MAX30102
 }
 
@@ -132,17 +135,17 @@ void loop() {
   //read the first 100 samples, and determine the signal range
   for(i=0;i<n_ir_buffer_length;i++)
   {
-    while(digitalRead(10)==1);  //wait until the interrupt pin asserts
+    while(digitalRead(8)==1);  //wait until the interrupt pin asserts
     maxim_max30102_read_fifo((aun_red_buffer+i), (aun_ir_buffer+i));  //read from MAX30102 FIFO
     
     if(un_min>aun_red_buffer[i])
       un_min=aun_red_buffer[i];  //update signal min
     if(un_max<aun_red_buffer[i])
       un_max=aun_red_buffer[i];  //update signal max
-    Serial.print(F("red="));
-    Serial.print(aun_red_buffer[i], DEC);
-    Serial.print(F(", ir="));
-    Serial.println(aun_ir_buffer[i], DEC);
+    SerialUSB.print(F("red="));
+    SerialUSB.print(aun_red_buffer[i], DEC);
+    SerialUSB.print(F(", ir="));
+    SerialUSB.println(aun_ir_buffer[i], DEC);
   }
   un_prev_data=aun_red_buffer[i];
   //calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
@@ -172,8 +175,7 @@ void loop() {
     for(i=75;i<100;i++)
     {
       un_prev_data=aun_red_buffer[i-1];
-      while(digitalRead(10)==1);
-      digitalWrite(9, !digitalRead(9));
+      while(digitalRead(8)==1);
       maxim_max30102_read_fifo((aun_red_buffer+i), (aun_ir_buffer+i));
 
       //calculate the brightness of the LED
@@ -199,24 +201,49 @@ void loop() {
       }
 
       //send samples and calculation result to terminal program through UART
-      Serial.print(F("red="));
-      Serial.print(aun_red_buffer[i], DEC);
-      Serial.print(F(", ir="));
-      Serial.print(aun_ir_buffer[i], DEC);
+      SerialUSB.print(F("red="));
+      SerialUSB.print(aun_red_buffer[i], DEC);
+      SerialUSB.print(F(", ir="));
+      SerialUSB.print(aun_ir_buffer[i], DEC);
       
-      Serial.print(F(", HR="));
-      Serial.print(n_heart_rate, DEC);
+      SerialUSB.print(F(", HR="));
+      SerialUSB.print(n_heart_rate, DEC);
       
-      Serial.print(F(", HRvalid="));
-      Serial.print(ch_hr_valid, DEC);
+      SerialUSB.print(F(", HRvalid="));
+      SerialUSB.print(ch_hr_valid, DEC);
       
-      Serial.print(F(", SPO2="));
-      Serial.print(n_spo2, DEC);
+      SerialUSB.print(F(", SPO2="));
+      SerialUSB.print(n_spo2, DEC);
 
-      Serial.print(F(", SPO2Valid="));
-      Serial.println(ch_spo2_valid, DEC);
+      SerialUSB.print(F(", SPO2Valid="));
+      SerialUSB.println(ch_spo2_valid, DEC);
+
+      writeText(n_heart_rate);
     }
     maxim_heart_rate_and_oxygen_saturation(aun_ir_buffer, n_ir_buffer_length, aun_red_buffer, &n_spo2, &ch_spo2_valid, &n_heart_rate, &ch_hr_valid); 
+  }
+}
+
+void writeText(int rate){
+  display.clearScreen();
+  //setFont sets a font info header from font.h
+  //information for generating new fonts is included in font.h
+  display.setFont(thinPixel7_10ptFontInfo);
+  //getPrintWidth(character array);//get the pixel print width of a string
+  int width=display.getPrintWidth("Heart Rate = ___");
+  //setCursor(x,y);//set text cursor position to (x,y)- in this example, the example string is centered
+  display.setCursor(48-(width/2),10);
+  //fontColor(text color, background color);//sets text and background color
+  display.fontColor(TS_8b_Red,TS_8b_Black);
+  char HR_text[width];
+  sprintf(HR_text, "Heart Rate = %3.3d",rate);
+  display.print(HR_text);
+  display.setCursor(15,25);
+  display.fontColor(TS_8b_Blue,TS_8b_Black);
+  if (rate < 100) {
+    display.print("Pick it up!");
+  } else {
+    display.print("Keep it up!");
   }
 }
  
