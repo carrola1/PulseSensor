@@ -94,29 +94,23 @@ int32_t n_heart_rate; //heart rate value
 int8_t  ch_hr_valid;  //indicator to show if the heart rate calculation is valid
 uint8_t uch_dummy;
 
+int32_t hr_buf[4];
+int32_t hrSum;
+int32_t hrAvg;
+int32_t spo2_buf[4];
+int32_t spo2Sum;
+int32_t spo2Avg;
 
 // the setup routine runs once when you press reset:
 void setup() {
   delay(1000);
   SerialUSB.begin(115200);
-  SerialUSB.println("Up and running!");
   Wire.begin();
   display.begin();
-  //setBrightness(brightness);//sets main current level, valid levels are 0-15
-  display.setBrightness(10);
+  display.setBrightness(10);  //setBrightness(brightness);//sets main current level, valid levels are 0-15
   maxim_max30102_reset(); //resets the MAX30102
-  // initialize serial communication at 115200 bits per second:
-  pinMode(8, INPUT);  //pin D10 connects to the interrupt output pin of the MAX30102
-  delay(1000);
+  pinMode(8, INPUT);  //pin D8 connects to the interrupt output pin of the MAX30102
   maxim_max30102_read_reg(REG_INTR_STATUS_1,&uch_dummy);  //Reads/clears the interrupt status register
-  while(SerialUSB.available()==0)  //wait until user presses a key
-  {
-    SerialUSB.write(27);       // ESC command
-    SerialUSB.print(F("[2J"));    // clear screen command
-    SerialUSB.println(F("Press any key to start conversion"));
-    delay(1000);
-  }
-  uch_dummy=SerialUSB.read();
   maxim_max30102_init();  //initialize the MAX30102
 }
 
@@ -142,10 +136,10 @@ void loop() {
       un_min=aun_red_buffer[i];  //update signal min
     if(un_max<aun_red_buffer[i])
       un_max=aun_red_buffer[i];  //update signal max
-    SerialUSB.print(F("red="));
+    /*SerialUSB.print(F("red="));
     SerialUSB.print(aun_red_buffer[i], DEC);
     SerialUSB.print(F(", ir="));
-    SerialUSB.println(aun_ir_buffer[i], DEC);
+    SerialUSB.println(aun_ir_buffer[i], DEC);*/
   }
   un_prev_data=aun_red_buffer[i];
   //calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
@@ -218,29 +212,70 @@ void loop() {
       SerialUSB.print(F(", SPO2Valid="));
       SerialUSB.println(ch_spo2_valid, DEC);
 
-      writeText(n_heart_rate);
+      SerialUSB.println(aun_red_buffer[i], DEC);
     }
-    maxim_heart_rate_and_oxygen_saturation(aun_ir_buffer, n_ir_buffer_length, aun_red_buffer, &n_spo2, &ch_spo2_valid, &n_heart_rate, &ch_hr_valid); 
+    maxim_heart_rate_and_oxygen_saturation(aun_ir_buffer, n_ir_buffer_length, aun_red_buffer, &n_spo2, &ch_spo2_valid, &n_heart_rate, &ch_hr_valid);
+    
+    if (ch_hr_valid == 1) {
+      if(n_heart_rate < 180) {
+        if(n_heart_rate > 45) {
+          hrSum = 0;
+          for(i=0;i<3;i++) {
+            hr_buf[i] = hr_buf[i+1];
+            hrSum = hrSum + hr_buf[i+1];
+          }
+          hr_buf[3] = n_heart_rate;
+          hrSum     = hrSum + n_heart_rate;
+        }
+      }
+    } 
+    hrAvg = hrSum>>2;
+    
+    if (ch_spo2_valid == 1) {
+      if(n_spo2 > 59) {
+        spo2Sum = 0;
+        for(i=0;i<3;i++) {
+          spo2_buf[i] = spo2_buf[i+1];
+          spo2Sum = spo2Sum + spo2_buf[i+1];
+        }
+        spo2_buf[3] = n_spo2;
+        spo2Sum     = spo2Sum + n_spo2;
+      }
+    }
+    spo2Avg = spo2Sum>>2;   
+    writeText(hrAvg, spo2Avg); 
   }
 }
 
-void writeText(int rate){
+void writeText(int rate, int spo2){
   display.clearScreen();
   //setFont sets a font info header from font.h
   //information for generating new fonts is included in font.h
   display.setFont(thinPixel7_10ptFontInfo);
+  
   //getPrintWidth(character array);//get the pixel print width of a string
   int width=display.getPrintWidth("Heart Rate = ___");
   //setCursor(x,y);//set text cursor position to (x,y)- in this example, the example string is centered
   display.setCursor(48-(width/2),10);
   //fontColor(text color, background color);//sets text and background color
   display.fontColor(TS_8b_Red,TS_8b_Black);
-  char HR_text[width];
-  sprintf(HR_text, "Heart Rate = %3.3d",rate);
-  display.print(HR_text);
-  display.setCursor(15,25);
+  char text[width];
+  sprintf(text, "Heart Rate = %3.3d",rate);
+  display.print(text);
+  
+  width=display.getPrintWidth("SPO2 = ___");
+  //setCursor(x,y);//set text cursor position to (x,y)- in this example, the example string is centered
+  display.setCursor(48-(width/2),25);
+  //fontColor(text color, background color);//sets text and background color
   display.fontColor(TS_8b_Blue,TS_8b_Black);
-  if (rate < 100) {
+  char text2[width];
+  sprintf(text2, "SPO2 = %3.3d",spo2);
+  display.print(text2);
+
+  width=display.getPrintWidth("Pick it up!");
+  display.setCursor(48-(width/2),40);
+  display.fontColor(TS_8b_Green,TS_8b_Black);
+  if (rate < 90) {
     display.print("Pick it up!");
   } else {
     display.print("Keep it up!");
