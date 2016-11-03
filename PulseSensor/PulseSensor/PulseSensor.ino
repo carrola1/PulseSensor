@@ -1,15 +1,4 @@
-/** \file RD117_LILYPAD.ino ******************************************************
-*
-* Project: MAXREFDES117#
-* Filename: RD117_LILYPAD.ino
-* Description: This module contains the Main application for the MAXREFDES117 example program.
-*
-* Revision History:
-*\n 1-18-2016 Rev 01.00 GL Initial release.
-*\n
-*
-* --------------------------------------------------------------------
-*
+/** 
 * This code follows the following naming conventions:
 *
 * char              ch_pmod_value
@@ -85,8 +74,8 @@ TinyScreen display = TinyScreen(TinyScreenPlus);
 
 #define MAX_BRIGHTNESS 255
 
-uint32_t aun_ir_buffer[100]; //infrared LED sensor data
-uint32_t aun_red_buffer[100];  //red LED sensor data
+uint32_t aun_ir_buffer[150]; //infrared LED sensor data
+uint32_t aun_red_buffer[150];  //red LED sensor data
 int32_t n_ir_buffer_length; //data length
 int32_t n_spo2;  //SPO2 value
 int8_t ch_spo2_valid;  //indicator to show if the SPO2 calculation is valid
@@ -94,12 +83,20 @@ int32_t n_heart_rate; //heart rate value
 int8_t  ch_hr_valid;  //indicator to show if the heart rate calculation is valid
 uint8_t uch_dummy;
 
-int32_t hr_buf[4];
+int32_t hr_buf[16];
 int32_t hrSum;
 int32_t hrAvg;
-int32_t spo2_buf[4];
+int32_t spo2_buf[16];
 int32_t spo2Sum;
 int32_t spo2Avg;
+int32_t spo2BuffFilled;
+int32_t hrBuffFilled;
+int32_t hrValidCnt = 0;
+int32_t spo2ValidCnt = 0;
+int32_t hrThrowOutSamp = 0;
+int32_t spo2ThrowOutSamp = 0;
+int32_t spo2Timeout = 0;
+int32_t hrTimeout = 0;
 
 // the setup routine runs once when you press reset:
 void setup() {
@@ -109,7 +106,7 @@ void setup() {
   display.begin();
   display.setBrightness(10);  //setBrightness(brightness);//sets main current level, valid levels are 0-15
   maxim_max30102_reset(); //resets the MAX30102
-  pinMode(8, INPUT);  //pin D8 connects to the interrupt output pin of the MAX30102
+  pinMode(2, INPUT);  //pin D2 connects to the interrupt output pin of the MAX30102
   maxim_max30102_read_reg(REG_INTR_STATUS_1,&uch_dummy);  //Reads/clears the interrupt status register
   maxim_max30102_init();  //initialize the MAX30102
 }
@@ -124,12 +121,12 @@ void loop() {
   un_min=0x3FFFF;
   un_max=0;
   
-  n_ir_buffer_length=100;  //buffer length of 100 stores 4 seconds of samples running at 25sps
+  n_ir_buffer_length=150;  //buffer length of 150 stores 3 seconds of samples running at 50sps
 
-  //read the first 100 samples, and determine the signal range
+  //read the first 150 samples, and determine the signal range
   for(i=0;i<n_ir_buffer_length;i++)
   {
-    while(digitalRead(8)==1);  //wait until the interrupt pin asserts
+    while(digitalRead(2)==1);  //wait until the interrupt pin asserts
     maxim_max30102_read_fifo((aun_red_buffer+i), (aun_ir_buffer+i));  //read from MAX30102 FIFO
     
     if(un_min>aun_red_buffer[i])
@@ -142,7 +139,7 @@ void loop() {
     SerialUSB.println(aun_ir_buffer[i], DEC);*/
   }
   un_prev_data=aun_red_buffer[i];
-  //calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
+  //calculate heart rate and SpO2 after first 150 samples (first 3 seconds of samples)
   maxim_heart_rate_and_oxygen_saturation(aun_ir_buffer, n_ir_buffer_length, aun_red_buffer, &n_spo2, &ch_spo2_valid, &n_heart_rate, &ch_hr_valid); 
 
   //Continuously taking samples from MAX30102.  Heart rate and SpO2 are calculated every 1 second
@@ -152,11 +149,11 @@ void loop() {
     un_min=0x3FFFF;
     un_max=0;
 
-    //dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
-    for(i=25;i<100;i++)
+    //dumping the first 50 sets of samples in the memory and shift the last 100 sets of samples to the top
+    for(i=50;i<150;i++)
     {
-      aun_red_buffer[i-25]=aun_red_buffer[i];
-      aun_ir_buffer[i-25]=aun_ir_buffer[i];
+      aun_red_buffer[i-50]=aun_red_buffer[i];
+      aun_ir_buffer[i-50]=aun_ir_buffer[i];
 
       //update the signal min and max
       if(un_min>aun_red_buffer[i])
@@ -165,11 +162,11 @@ void loop() {
         un_max=aun_red_buffer[i];
     }
 
-    //take 25 sets of samples before calculating the heart rate.
-    for(i=75;i<100;i++)
+    //take 50 sets of samples before calculating the heart rate.
+    for(i=100;i<150;i++)
     {
       un_prev_data=aun_red_buffer[i-1];
-      while(digitalRead(8)==1);
+      while(digitalRead(2)==1);
       maxim_max30102_read_fifo((aun_red_buffer+i), (aun_ir_buffer+i));
 
       //calculate the brightness of the LED
@@ -195,7 +192,7 @@ void loop() {
       }
 
       //send samples and calculation result to terminal program through UART
-      SerialUSB.print(F("red="));
+      /*SerialUSB.print(F("red="));
       SerialUSB.print(aun_red_buffer[i], DEC);
       SerialUSB.print(F(", ir="));
       SerialUSB.print(aun_ir_buffer[i], DEC);
@@ -210,40 +207,147 @@ void loop() {
       SerialUSB.print(n_spo2, DEC);
 
       SerialUSB.print(F(", SPO2Valid="));
-      SerialUSB.println(ch_spo2_valid, DEC);
+      SerialUSB.println(ch_spo2_valid, DEC);*/
 
-      SerialUSB.println(aun_red_buffer[i], DEC);
+      SerialUSB.println(aun_ir_buffer[i], DEC);
     }
     maxim_heart_rate_and_oxygen_saturation(aun_ir_buffer, n_ir_buffer_length, aun_red_buffer, &n_spo2, &ch_spo2_valid, &n_heart_rate, &ch_hr_valid);
     
-    if (ch_hr_valid == 1) {
-      if(n_heart_rate < 180) {
-        if(n_heart_rate > 45) {
-          hrSum = 0;
-          for(i=0;i<3;i++) {
-            hr_buf[i] = hr_buf[i+1];
-            hrSum = hrSum + hr_buf[i+1];
+    if ((ch_hr_valid == 1) && (n_heart_rate < 190) && (n_heart_rate > 40)) {
+      hrTimeout = 0;
+      
+      // Throw out up to 1 out of every 5 valid samples if wacky
+      if (hrValidCnt == 4) {
+        hrThrowOutSamp = 1;
+        hrValidCnt = 0;
+        for (i=12;i<16;i++) {
+          if (n_heart_rate < hr_buf[i]+10) {
+            hrThrowOutSamp = 0;
+            hrValidCnt   = 4;
           }
-          hr_buf[3] = n_heart_rate;
-          hrSum     = hrSum + n_heart_rate;
         }
+      } else {
+        hrValidCnt = hrValidCnt + 1;
+      }
+      
+      if (hrThrowOutSamp == 0) {
+        
+        // Shift New Sample into buffer
+        for(i=0;i<15;i++) {
+            hr_buf[i] = hr_buf[i+1];
+        }
+        hr_buf[15] = n_heart_rate;
+
+        // Update buffer fill value
+        if (hrBuffFilled < 16) {
+          hrBuffFilled = hrBuffFilled + 1;
+        }
+
+        // Take moving average
+        hrSum = 0;
+        if (hrBuffFilled < 2) {
+          hrAvg = 0;
+        } else if (hrBuffFilled < 4) {
+          for(i=14;i<16;i++) {
+            hrSum = hrSum + hr_buf[i];
+          }
+          hrAvg = hrSum>>1;
+        } else if (hrBuffFilled < 8) {
+          for(i=12;i<16;i++) {
+            hrSum = hrSum + hr_buf[i];
+          }
+          hrAvg = hrSum>>2;
+        } else if (hrBuffFilled < 16) {
+          for(i=8;i<16;i++) {
+            hrSum = hrSum + hr_buf[i];
+          }
+          hrAvg = hrSum>>3;
+        } else {
+          for(i=0;i<16;i++) {
+            hrSum = hrSum + hr_buf[i];
+          }
+          hrAvg = hrSum>>4;
+        }
+      }
+      hrThrowOutSamp = 0;
+    } else {
+      hrValidCnt = 0;
+      if (hrTimeout == 4) {
+        hrAvg = 0;
+        hrBuffFilled = 0;
+      } else {
+        hrTimeout++;
       }
     } 
-    hrAvg = hrSum>>2;
-    
-    if (ch_spo2_valid == 1) {
-      if(n_spo2 > 59) {
-        spo2Sum = 0;
-        for(i=0;i<3;i++) {
-          spo2_buf[i] = spo2_buf[i+1];
-          spo2Sum = spo2Sum + spo2_buf[i+1];
+
+    if ((ch_spo2_valid == 1) && (n_spo2 > 59)) {
+      spo2Timeout = 0;
+      
+      // Throw out up to 1 out of every 5 valid samples if wacky
+      if (spo2ValidCnt == 4) {
+        spo2ThrowOutSamp = 1;
+        spo2ValidCnt = 0;
+        for (i=12;i<16;i++) {
+          if (n_spo2 > spo2_buf[i]-10) {
+            spo2ThrowOutSamp = 0;
+            spo2ValidCnt   = 4;
+          }
         }
-        spo2_buf[3] = n_spo2;
-        spo2Sum     = spo2Sum + n_spo2;
+      } else {
+        spo2ValidCnt = spo2ValidCnt + 1;
       }
-    }
-    spo2Avg = spo2Sum>>2;   
-    writeText(hrAvg, spo2Avg); 
+      
+      if (spo2ThrowOutSamp == 0) {
+        
+        // Shift New Sample into buffer
+        for(i=0;i<15;i++) {
+            spo2_buf[i] = spo2_buf[i+1];
+        }
+        spo2_buf[15] = n_spo2;
+
+        // Update buffer fill value
+        if (spo2BuffFilled < 16) {
+          spo2BuffFilled = spo2BuffFilled + 1;
+        }
+
+        // Take moving average
+        spo2Sum = 0;
+        if (spo2BuffFilled < 2) {
+          spo2Avg = 0;
+        } else if (spo2BuffFilled < 4) {
+          for(i=14;i<16;i++) {
+            spo2Sum = spo2Sum + spo2_buf[i];
+          }
+          spo2Avg = spo2Sum>>1;
+        } else if (spo2BuffFilled < 8) {
+          for(i=12;i<16;i++) {
+            spo2Sum = spo2Sum + spo2_buf[i];
+          }
+          spo2Avg = spo2Sum>>2;
+        } else if (spo2BuffFilled < 16) {
+          for(i=8;i<16;i++) {
+            spo2Sum = spo2Sum + spo2_buf[i];
+          }
+          spo2Avg = spo2Sum>>3;
+        } else {
+          for(i=0;i<16;i++) {
+            spo2Sum = spo2Sum + spo2_buf[i];
+          }
+          spo2Avg = spo2Sum>>4;
+        }
+      }
+      spo2ThrowOutSamp = 0;
+    } else {
+      spo2ValidCnt = 0;
+      if (spo2Timeout == 4) {
+        spo2Avg = 0;
+        spo2BuffFilled = 0;
+      } else {
+        spo2Timeout++;
+      }
+    } 
+    
+    writeText(hrAvg, spo2Avg);   
   }
 }
 
@@ -260,8 +364,12 @@ void writeText(int rate, int spo2){
   //fontColor(text color, background color);//sets text and background color
   display.fontColor(TS_8b_Red,TS_8b_Black);
   char text[width];
-  sprintf(text, "Heart Rate = %3.3d",rate);
-  display.print(text);
+  if (rate == 0) {
+    display.print("Heart Rate = ---");
+  } else {
+    sprintf(text, "Heart Rate = %3.3d",rate);
+    display.print(text);
+  }
   
   width=display.getPrintWidth("SPO2 = ___");
   //setCursor(x,y);//set text cursor position to (x,y)- in this example, the example string is centered
@@ -269,16 +377,28 @@ void writeText(int rate, int spo2){
   //fontColor(text color, background color);//sets text and background color
   display.fontColor(TS_8b_Blue,TS_8b_Black);
   char text2[width];
-  sprintf(text2, "SPO2 = %3.3d",spo2);
-  display.print(text2);
-
-  width=display.getPrintWidth("Pick it up!");
-  display.setCursor(48-(width/2),40);
-  display.fontColor(TS_8b_Green,TS_8b_Black);
-  if (rate < 90) {
-    display.print("Pick it up!");
+  if (spo2 == 0) {
+    display.print("SPO2 = ---");
   } else {
-    display.print("Keep it up!");
+    sprintf(text2, "SPO2 = %3.3d",spo2);
+    display.print(text2);
+  }
+
+  if (spo2 == 0) {
+    width=display.getPrintWidth("Place Finger");
+    display.setCursor(48-(width/2),40);
+    display.fontColor(TS_8b_Green,TS_8b_Black);
+    display.print("Place Finger");
+  } else if (spo2 < 93) {
+    width=display.getPrintWidth("SPO2 Low!");
+    display.setCursor(48-(width/2),40);
+    display.fontColor(TS_8b_Green,TS_8b_Black);
+    display.print("SPO2 Low!");
+  } else {
+    width=display.getPrintWidth("Looking Good!");
+    display.setCursor(48-(width/2),40);
+    display.fontColor(TS_8b_Green,TS_8b_Black);
+    display.print("Looking Good!");
   }
 }
  

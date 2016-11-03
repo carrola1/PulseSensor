@@ -117,7 +117,7 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer, int32_t n_i
   if( n_th1>60) n_th1=60; // max allowed
 
   for ( k=0 ; k<15;k++) an_ir_valley_locs[k]=0;
-  // since we flipped signal, we use peak detector as valley detector
+  // since we flipped signal, we use peak detector as vSalley detector
   maxim_find_peaks( an_ir_valley_locs, &n_npks, an_x, BUFFER_SIZE, n_th1, 4, 15 );//peak_height, peak_distance, max_num_peaks 
   n_peak_interval_sum =0;
   if (n_npks>=2){
@@ -222,24 +222,37 @@ void maxim_peaks_above_min_height( int32_t *pn_locs, int32_t *n_npks,  int32_t  
 * \retval       None
 */
 {
-  int32_t i = 1, n_width;
+  int32_t i = 1, n_width, riseFound = 0, holdOff1 = 0, holdOff2 = 0, holdOffThresh = 4;
   *n_npks = 0;
   
   while (i < n_size-1){
-    if (pn_x[i] > n_min_height && pn_x[i] > pn_x[i-1]){      // find left edge of potential peaks
-      n_width = 1;
-      while (i+n_width < n_size && pn_x[i] == pn_x[i+n_width])  // find flat peaks
-        n_width++;
-      if (pn_x[i] > pn_x[i+n_width] && (*n_npks) < 15 ){      // find right edge of peaks
-        pn_locs[(*n_npks)++] = i;    
-        // for flat peaks, peak location is left edge
-        i += n_width+1;
+    if (holdOff2 == 0) {
+      if (pn_x[i] > n_min_height && pn_x[i] > pn_x[i-1]){      // find left edge of potential peaks
+        riseFound = 1;
       }
-      else
-        i += n_width;
+      if (riseFound == 1) {
+        if ((pn_x[i] < n_min_height) && (holdOff1 < holdOffThresh)) {   // if false edge
+            riseFound = 0;
+            holdOff1 = 0;
+        } else {
+            if (holdOff1 == holdOffThresh) { 
+                if ((pn_x[i] < n_min_height) && (pn_x[i-1] >= n_min_height)) {
+                    if ((*n_npks) < 15 ){
+                      pn_locs[(*n_npks)++] = i;   // peak is right edge
+                    }
+                    holdOff1 = 0;
+                    riseFound = 0;
+                    holdOff2 = 8;
+                }
+            } else {
+                holdOff1 = holdOff1 + 1;
+            }
+        }
+      }
+    } else {
+      holdOff2 = holdOff2 - 1;
     }
-    else
-      i++;
+    i++;
   }
 }
 
